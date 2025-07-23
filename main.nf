@@ -15,6 +15,6 @@ workflow {
     "FastQC completed for sample: ${meta.id}" }
 
     QC.out.nanoplot_html.view { meta, _files -> 
-    "NanoPlot completed for sample: ${meta.id}" }
+    "LongQC completed for sample: ${meta.id}" }
 
 }

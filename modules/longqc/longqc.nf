@@ -1,6 +1,9 @@
-process NANOPLOT {
+process LONGQC {
     tag "$meta.id"
     publishDir "${params.outdir}/nanoplot", mode: 'copy'
+
+    // Docker container for LongQC
+    container 'quay.io/biocontainers/longqc:1.2.0c--hdfd78af_0'
 
     input:
     tuple val(meta), path(reads)
@@ -11,6 +14,11 @@ process NANOPLOT {
 
     script:
     """
-    NanoPlot --outdir . --threads ${task.cpus} --fastq ${reads}
+    python longqc sampleqc \\
+    -x ont-rapid \\
+    -o ${meta.id} \\
+    -p ${task.cpus} \\
+    ${reads}
+    
     """
 }
