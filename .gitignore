@@ -1,0 +1,7 @@
+.nextflow.log
+.nextflow/
+*.nf.cache
+
+work/
+
+test/
