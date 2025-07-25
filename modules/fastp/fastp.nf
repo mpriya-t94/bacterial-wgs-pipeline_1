@@ -38,8 +38,11 @@ process FASTP {
         --html ${prefix}_fastp.html \\
         --json ${prefix}_fastp.json \\
         --thread ${task.cpus} \\
+        --compression 1 \\
         --qualified_quality_phred \$QUALITY_THRESHOLD \\
         --detect_adapter_for_pe \\
+        --dedup \\
+        --trim_poly_x \\
         --length_required 50
     """
 
