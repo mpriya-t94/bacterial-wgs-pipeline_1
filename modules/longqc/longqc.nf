@@ -1,9 +1,9 @@
 process LONGQC {
     tag "$meta.id"
-    publishDir "${params.outdir}/nanoplot", mode: 'copy'
+    publishDir "${params.outdir}/longqc", mode: 'copy'
 
-    // Docker container for LongQC
-    container 'quay.io/biocontainers/longqc:1.2.0c--hdfd78af_0'
+    // Conda package for LongQC
+    conda 'bioconda::longqc'
 
     input:
     tuple val(meta), path(reads)
@@ -14,7 +14,7 @@ process LONGQC {
 
     script:
     """
-    python longqc sampleqc \\
+    python \$(which longQC.py) sampleqc \\
     -x ont-rapid \\
     -o ${meta.id} \\
     -p ${task.cpus} \\
