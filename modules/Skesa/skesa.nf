@@ -1,5 +1,3 @@
-nextflow
-
 process SKESA {
     tag "$meta.id"
     publishDir "${params.outdir}/skesa", mode: 'copy'
