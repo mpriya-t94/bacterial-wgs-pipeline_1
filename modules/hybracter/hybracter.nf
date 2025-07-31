@@ -1,13 +1,12 @@
 process HYBRACTER {
     tag "$meta.id"
-    label 'process_high'
+    publishDir "${params.outdir}/hybracter", mode: 'copy'
 
-    // Use the latest Hybracter container (v0.11.0)
-    container 'biocontainers/hybracter:0.7.0--pyhdfd78af_0'
-
+    conda 'bioconda::hybracter=0.11.2'
 
     input:
-    tuple val(meta), path(long_reads), path(short_reads), val(mode), val(chromosome_size)
+    tuple val(meta), path(long_reads)
+    tuple val(meta2), path(short_reads), optional: true
 
     output:
     tuple val(meta), path("*/FINAL_OUTPUT/complete/*.fasta"), emit: complete_assemblies
@@ -15,91 +14,65 @@ process HYBRACTER {
     tuple val(meta), path("*/FINAL_OUTPUT/plasmids/*.fasta"), emit: plasmids, optional: true
     tuple val(meta), path("*/hybracter_summary.tsv"), emit: summary
     tuple val(meta), path("*/processing_summary.tsv"), emit: processing_summary
-    tuple val(meta), path("*/FINAL_OUTPUT"), emit: final_output_dir
-    path "versions.yml", emit: versions
-
-    when:
-    task.ext.when == null || task.ext.when
 
     script:
-    def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}"
-
-    def assembly_mode = mode ?: 'hybrid'
-    def chr_size = chromosome_size ?: 'auto'
-    def chr_size_param = chr_size == 'auto' ? '' : "--chromosome ${chr_size}"
+    def prefix = "${meta.id}"
+    
+    // Assembly mode - hybrid if short reads available, long-only if not
+    def assembly_mode = (short_reads && short_reads.size() >= 2) ? "hybrid-single" : "long-single"
+    
+    // Parameters
     def threads = task.cpus ?: 4
     def memory = task.memory ? "${task.memory.toGiga()}G" : "16G"
+    def chromosome_size = params.chromosome_size ?: "auto"
+    def chr_size_param = chromosome_size == "auto" ? "" : "-c ${chromosome_size}"
+    
+    // Optional parameters
+    def min_length = params.min_length ? "--min_length ${params.min_length}" : ""
+    def min_quality = params.min_quality ? "--min_quality ${params.min_quality}" : ""
+    def contaminants = params.contaminants ? "--contaminants ${params.contaminants}" : ""
+    def logic = params.logic ? "--logic ${params.logic}" : ""
+    def depth_filter = params.depth_filter ? "--depth_filter ${params.depth_filter}" : ""
+    def no_pypolca = params.no_pypolca ? "--no_pypolca" : ""
+    def no_medaka = params.no_medaka ? "--no_medaka" : ""
+    def medaka_model = params.medaka_model ? "--medaka_model ${params.medaka_model}" : ""
 
     """
-    # Create output directory
     mkdir -p ${prefix}
-
-    # Run Hybracter based on mode
-    case "${assembly_mode}" in
-        "hybrid")
-            hybracter hybrid \\
-                -i ${long_reads} \\
-                --out ${prefix} \\
-                --threads ${threads} \\
-                --ram ${memory} \\
-                ${chr_size_param} \\
-                ${args}
-            ;;
-        "hybrid-single")
-            hybracter hybrid-single \\
-                -l ${long_reads} \\
-                -1 ${short_reads[0]} \\
-                -2 ${short_reads.size() > 1 ? short_reads[1] : ''} \\
-                -s ${meta.id} \\
-                -c ${chr_size} \\
-                --out ${prefix} \\
-                --threads ${threads} \\
-                --ram ${memory} \\
-                ${args}
-            ;;
-        "long")
-            hybracter long \\
-                -i ${long_reads} \\
-                --out ${prefix} \\
-                --threads ${threads} \\
-                --ram ${memory} \\
-                ${chr_size_param} \\
-                ${args}
-            ;;
-        "long-single")
-            hybracter long-single \\
-                -l ${long_reads} \\
-                -s ${meta.id} \\
-                -c ${chr_size} \\
-                --out ${prefix} \\
-                --threads ${threads} \\
-                --ram ${memory} \\
-                ${args}
-            ;;
-        *)
-            echo "Error: Unsupported assembly mode: ${assembly_mode}"
-            echo "Supported modes: hybrid, hybrid-single, long, long-single"
-            exit 1
-            ;;
-    esac
-
-    # Generate versions file
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        hybracter: \$(hybracter --version 2>&1 | grep -E '^hybracter' | sed 's/hybracter //')
-        python: \$(python --version | sed 's/Python //')
-    END_VERSIONS
-    """
-
-    stub:
-    def prefix = task.ext.prefix ?: "${meta.id}"
-    """
-    mkdir -p ${prefix}/FINAL_OUTPUT/{complete,incomplete,plasmids}
-    touch ${prefix}/FINAL_OUTPUT/complete/${prefix}_complete.fasta
-    touch ${prefix}/FINAL_OUTPUT/plasmids/${prefix}_plasmid.fasta
-    touch ${prefix}/hybracter_summary.tsv
-    touch ${prefix}/processing_summary.tsv
-    touch versions.yml
+    
+    if [[ "${assembly_mode}" == "hybrid-single" ]]; then
+        hybracter hybrid-single \\
+            -l ${long_reads} \\
+            -1 ${short_reads[0]} \\
+            -2 ${short_reads[1]} \\
+            -s ${prefix} \\
+            ${chr_size_param} \\
+            --out ${prefix} \\
+            --threads ${threads} \\
+            --ram ${memory} \\
+            ${min_length} \\
+            ${min_quality} \\
+            ${contaminants} \\
+            ${logic} \\
+            ${depth_filter} \\
+            ${no_pypolca} \\
+            ${no_medaka} \\
+            ${medaka_model}
+    else
+        hybracter long-single \\
+            -l ${long_reads} \\
+            -s ${prefix} \\
+            ${chr_size_param} \\
+            --out ${prefix} \\
+            --threads ${threads} \\
+            --ram ${memory} \\
+            ${min_length} \\
+            ${min_quality} \\
+            ${contaminants} \\
+            ${logic} \\
+            ${depth_filter} \\
+            ${no_medaka} \\
+            ${medaka_model}
+    fi
     """
 }
