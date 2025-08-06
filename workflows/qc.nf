@@ -1,9 +1,10 @@
 // Import modules
 include { FASTQC as FASTQC_PRE } from '../modules/fastqc/fastqc.nf'
 include { FASTQC as FASTQC_POST } from '../modules/fastqc/fastqc.nf'
-include { LONGQC as LONGQC_PRE } from '../modules/longqc/longqc.nf'
-include { LONGQC as LONGQC_POST } from '../modules/longqc/longqc.nf'
+include { NANOPLOT as NANOPLOT_PRE } from '../modules/nanoplot/nanoplot.nf'
+include { NANOPLOT as NANOPLOT_POST } from '../modules/nanoplot/nanoplot.nf'
 include { FASTP } from '../modules/fastp/fastp.nf'
+include { FILTLONG } from '../modules/filtlong/filtlong.nf'
 include { MULTIQC as MULTIQC_PRE } from '../modules/multiqc/multiqc.nf'
 include { MULTIQC as MULTIQC_POST } from '../modules/multiqc/multiqc.nf'
 
@@ -20,12 +21,12 @@ workflow PRE_QC {
     // Run FastQC on short reads in parallel
     FASTQC_PRE(short_reads)
     
-    // Run LongQC on long reads in parallel (only if long reads exist)
+    // Run nanoplot on long reads in parallel (only if long reads exist)
     ch_long_filtered = long_reads
         .filter { _meta, reads -> reads != null && reads.toString() != 'null' }
     
-    LONGQC_PRE(ch_long_filtered)
-    ch_longqc_results = LONGQC_PRE.out
+    NANOPLOT_PRE(ch_long_filtered)
+    ch_nanoplot_results = NANOPLOT_PRE.out
     
     // Collect FastQC results for MultiQC (short reads only)
     ch_pre_multiqc = FASTQC_PRE.out.zip
@@ -41,9 +42,9 @@ workflow PRE_QC {
     fastqc_html = FASTQC_PRE.out.html
     fastqc_zip = FASTQC_PRE.out.zip
     
-    // LongQC outputs
-    longqc_html = ch_longqc_results.html
-    longqc_plots = ch_longqc_results.plots
+    // nanoplot outputs
+    nanoplot_html = ch_nanoplot_results.html
+    nanoplot_plots = ch_nanoplot_results.plots
     
     // MultiQC outputs
     multiqc_html = MULTIQC_PRE.out.html
@@ -60,7 +61,10 @@ workflow PRE_QC {
 workflow TRIMMING {
     take:
     short_reads     // Channel: [[meta], [reads]]
+    long_reads      // Channel: [[meta], [reads]]
     fastqc_zip      // Channel: [[meta], zip_files] from PRE_QC
+    illumina_refs   // Channel: [[meta], [illumina_R1, illumina_R2]]
+    assembly        // Channel: [[meta], assembly_file]
 
     main:
     
@@ -74,6 +78,26 @@ workflow TRIMMING {
     // Run adaptive trimming with FASTP
     FASTP(ch_trimming_input)
 
+    // Long read processing through FILTLONG
+    ch_long_for_filtlong = long_reads
+        .filter { _meta, reads -> reads != null && reads.toString() != 'null' }
+
+    // Prepare FILTLONG input
+    // Change from combine to join:
+    ch_filtlong_input = ch_long_for_filtlong
+        .join(illumina_refs, by: 0, remainder: true)
+        .join(assembly, by: 0, remainder: true)
+        .map { meta, reads, illum, asm -> 
+            [meta, reads, illum ?: [meta, []], asm ?: null]
+    }
+
+    // Run FILTLONG on long reads
+    FILTLONG(
+        ch_filtlong_input.map { meta, reads, illum, asm -> [meta, reads] },
+        ch_filtlong_input.map { meta, reads, illum, asm -> illum },
+        ch_filtlong_input.map { meta, reads, illum, asm -> asm }
+    )
+
     emit:
     // Trimmed reads for POST-QC
     trimmed_reads = FASTP.out.trimmed_reads
@@ -81,7 +105,12 @@ workflow TRIMMING {
     // FASTP QC outputs
     fastp_html = FASTP.out.html
     fastp_json = FASTP.out.json
+
+    // FILTLONG outputs
+    filtered_long_reads = FILTLONG.out.filtered_reads
+    filtlong_log        = FILTLONG.out.log
 }
+
 
 //
 // POST-QC SUBWORKFLOW
@@ -89,19 +118,19 @@ workflow TRIMMING {
 workflow POST_QC {
     take:
     trimmed_short_reads  // Channel: [[meta], [trimmed_reads]]
-    long_reads          // Channel: [[meta], [reads]] - original long reads
+    filtered_long_reads  // Channel: [[meta], [reads]] - original long reads
 
     main:
     
     // Run FastQC on trimmed short reads
     FASTQC_POST(trimmed_short_reads)
     
-    // Run LongQC on original long reads (same as pre-QC for comparison)
-    ch_long_filtered = long_reads
+    // Run nanoplot on FILTERED long reads
+    ch_long_filtered = filtered_long_reads
         .filter { _meta, reads -> reads != null && reads.toString() != 'null' }
     
-    LONGQC_POST(ch_long_filtered)
-    ch_longqc_post_results = LONGQC_POST.out
+    NANOPLOT_POST(ch_long_filtered)
+    ch_nanoplot_post_results = NANOPLOT_POST.out
     
     // Collect Post-QC FastQC results for MultiQC
     ch_post_multiqc = FASTQC_POST.out.zip
@@ -117,9 +146,9 @@ workflow POST_QC {
     fastqc_html = FASTQC_POST.out.html
     fastqc_zip = FASTQC_POST.out.zip
     
-    // LongQC outputs
-    longqc_html = ch_longqc_post_results.html
-    longqc_plots = ch_longqc_post_results.plots
+    // nanoplot outputs
+    nanoplot_html = ch_nanoplot_post_results.html
+    nanoplot_plots = ch_nanoplot_post_results.plots
     
     // MultiQC outputs
     multiqc_html = MULTIQC_POST.out.html
@@ -141,42 +170,58 @@ workflow QC {
         .splitCsv(header: true)
 
     // Split into short and long reads channels with better organization
-    ch_samples
-        .branch { row -> 
-            short_reads: row.fastq_1 && row.fastq_2
-                return [[id: row.sample_id, read_type: 'short'],
-                        [file(row.fastq_1), file(row.fastq_2)]] 
-            
-            long_reads: row.long_reads
-                return [[id: row.sample_id, read_type: 'long'],
-                        [file(row.long_reads)]]
-        }
-        .set { read_channels }
+    ch_samples_split = ch_samples
+    .multiMap { row -> 
+        short_reads: 
+            (row.fastq_1 && row.fastq_2) ? 
+            [[id: row.sample_id, read_type: 'short'], [file(row.fastq_1), file(row.fastq_2)]] : null
+        
+        long_reads: 
+            row.long_reads ? 
+            [[id: row.sample_id, read_type: 'long'], [file(row.long_reads)]] : null
+        
+        illumina_refs: 
+            (row.illumina_ref_1 && row.illumina_ref_2) ? 
+            [[id: row.sample_id, read_type: 'illumina'], [file(row.illumina_ref_1), file(row.illumina_ref_2)]] : null
+        
+        assembly: 
+            row.assembly ? 
+            [[id: row.sample_id, read_type: 'assembly'], [file(row.assembly)]] : null
+    }
+
+    // Filter out nulls - this is the correct syntax
+    ch_short_reads = ch_samples_split.short_reads.filter { it != null }
+    ch_long_reads = ch_samples_split.long_reads.filter { it != null }
+    ch_illumina_refs = ch_samples_split.illumina_refs.filter { it != null }
+    ch_assembly = ch_samples_split.assembly.filter { it != null }
 
     // Execute PRE-QC subworkflow
     PRE_QC(
-        read_channels.short_reads,
-        read_channels.long_reads
+        ch_short_reads,
+        ch_long_reads
     )
     
     // Execute TRIMMING subworkflow (short reads only)
     TRIMMING(
         PRE_QC.out.short_reads_passthrough,
-        PRE_QC.out.fastqc_zip
+        PRE_QC.out.long_reads_passthrough,
+        PRE_QC.out.fastqc_zip,
+        ch_illumina_refs,
+        ch_assembly
     )
     
     // Execute POST-QC subworkflow
     POST_QC(
         TRIMMING.out.trimmed_reads,
-        PRE_QC.out.long_reads_passthrough
+        TRIMMING.out.filtered_long_reads
     )
 
     emit:
     // PRE-QC outputs
     fastqc_pre_html = PRE_QC.out.fastqc_html
-    longqc_pre_html = PRE_QC.out.longqc_plots
+    nanoplot_pre_html = PRE_QC.out.nanoplot_html
     fastqc_pre_zip = PRE_QC.out.fastqc_zip
-    longqc_pre_zip = PRE_QC.out.longqc_html
+    nanoplot_pre_plots = PRE_QC.out.nanoplot_plots
     multiqc_pre_html = PRE_QC.out.multiqc_html
     multiqc_pre_data = PRE_QC.out.multiqc_data
 
@@ -184,12 +229,14 @@ workflow QC {
     fastp_trimmed_reads = TRIMMING.out.trimmed_reads
     fastp_html = TRIMMING.out.fastp_html
     fastp_json = TRIMMING.out.fastp_json
+    filtlong_filtered_reads = TRIMMING.out.filtered_long_reads
+    filtlong_log = TRIMMING.out.filtlong_log
 
     // POST-QC outputs
     fastqc_post_html = POST_QC.out.fastqc_html
-    longqc_post_html = POST_QC.out.longqc_plots
+    nanoplot_post_html = POST_QC.out.nanoplot_html
     fastqc_post_zip = POST_QC.out.fastqc_zip
-    longqc_post_zip = POST_QC.out.longqc_html
+    nanoplot_post_plots = POST_QC.out.nanoplot_plots
     multiqc_post_html = POST_QC.out.multiqc_html
     multiqc_post_data = POST_QC.out.multiqc_data
 }
