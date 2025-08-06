@@ -1,6 +1,6 @@
 process FASTP {
     tag "$meta.id"
-    publishDir "${params.outdir}/fastp", mode: 'copy'
+    publishDir "${params.outdir}/${meta.id}/trimming/fastp", mode: 'copy'
 
     // Docker container for FASTP
     container 'quay.io/biocontainers/fastp:1.0.1--heae3180_0'
