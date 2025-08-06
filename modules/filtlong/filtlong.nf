@@ -1,13 +1,13 @@
 process FILTLONG {
     tag "$meta.id"
-    publishDir "${params.outdir}/filtlong", mode: 'copy'
+    publishDir "${params.outdir}/${meta.id}/trimming/filtlong", mode: 'copy'
 
     container 'quay.io/biocontainers/filtlong:0.2.1--h9a82719_0'
 
     input:
     tuple val(meta), path(reads)
-    tuple val(meta2), path(illumina_reads), optional: true
-    path assembly, optional: true
+    tuple val(meta2), path(illumina_reads, stageAs: 'null')
+    path assembly, stageAs: 'null'
 
     output:
     tuple val(meta), path("*_filtered.fastq.gz"), emit: filtered_reads

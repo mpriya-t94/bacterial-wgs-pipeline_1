@@ -1,0 +1,78 @@
+nextflow_process {
+    name "Test FASTQC process"
+    script "./main.nf"
+    process "FASTQC"
+
+    test("Should run FASTQC on single-end reads") {
+        when {
+            params {
+                outdir = "output"
+            }
+            
+            process {
+                """
+                input[0] = [
+                    [ id:'test_sample' ],
+                    file("${projectDir}/test_data/test.fastq.gz")
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.trace.tasks().size() == 1
+            
+            with(process.out.html) {
+                assert size() == 1
+                assert get(0)[0].id == "test_sample"
+                assert path(get(0)[1]).toString().endsWith("html")
+            }
+            
+            with(process.out.zip) {
+                assert size() == 1
+                assert get(0)[0].id == "test_sample"
+                assert path(get(0)[1]).toString().endsWith("zip")
+            }
+        }
+    }
+
+    test("Should run FASTQC on paired-end reads") {
+        when {
+            params {
+                outdir = "output"
+            }
+            
+            process {
+                """
+                input[0] = [
+                    [ id:'test_paired' ],
+                    [ 
+                        file("${projectDir}/test_data/test_1.fastq.gz"),
+                        file("${projectDir}/test_data/test_2.fastq.gz")
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.trace.tasks().size() == 1
+            
+            with(process.out.html) {
+                assert size() == 1
+                assert get(0)[0].id == "test_paired"
+                assert path(get(0)[1]).toString().contains("html")
+                assert path(get(0)[1]).countFiles() == 2
+            }
+            
+            with(process.out.zip) {
+                assert size() == 1
+                assert get(0)[0].id == "test_paired"
+                assert path(get(0)[1]).toString().contains("zip")
+                assert path(get(0)[1]).countFiles() == 2
+            }
+        }
+    }
+}

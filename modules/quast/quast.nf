@@ -1,6 +1,6 @@
 process QUAST {
     tag "$meta.id"
-    publishDir "${params.outdir}/quast", mode: 'copy'
+    publishDir "${params.outdir}/${meta.id}/assembly/quast", mode: 'copy'
 
     // Docker container for QUAST
     container 'quay.io/biocontainers/quast:5.2.0--py39pl5321h4e691d4_3'
@@ -9,7 +9,7 @@ process QUAST {
     tuple val(meta), path(assemblies)
     path reference, stageAs: 'reference.fasta'
     path genes, stageAs: 'genes.gff'
-    tuple val(meta2), path(reads), optional: true
+    tuple val(meta2), path(reads, stageAs: 'null')
 
     output:
     tuple val(meta), path("quast_output/"), emit: results

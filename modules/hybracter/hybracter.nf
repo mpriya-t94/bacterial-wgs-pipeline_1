@@ -1,12 +1,12 @@
 process HYBRACTER {
     tag "$meta.id"
-    publishDir "${params.outdir}/hybracter", mode: 'copy'
+    publishDir "${params.outdir}/${meta.id}/assembly/hybracter", mode: 'copy'
 
     conda 'bioconda::hybracter=0.11.2'
 
     input:
     tuple val(meta), path(long_reads)
-    tuple val(meta2), path(short_reads), optional: true
+    tuple val(meta2), path(short_reads, stageAs: 'null')
 
     output:
     tuple val(meta), path("*/FINAL_OUTPUT/complete/*.fasta"), emit: complete_assemblies
