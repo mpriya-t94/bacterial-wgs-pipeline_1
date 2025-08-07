@@ -17,13 +17,25 @@ workflow PRE_QC {
     long_reads   // Channel: [[meta], [reads]]
 
     main:
+
+    // Run FastQC on short reads in parallel - add stage info
+    ch_short_reads_pre = short_reads.map { meta, reads -> 
+        [[id: meta.id, read_type: meta.read_type, stage: 'pre_qc'], reads] 
+    }
     
     // Run FastQC on short reads in parallel
-    FASTQC_PRE(short_reads)
+    FASTQC_PRE(ch_short_reads_pre)
+
+    // Run nanoplot on long reads in parallel (only if long reads exist) - add stage info
+    ch_long_filtered = long_reads
+        .filter { meta, reads -> reads != null && reads.toString() != 'null' }
+        .map { meta, reads -> 
+            [[id: meta.id, read_type: meta.read_type, stage: 'pre_qc'], reads] 
+        }
     
     // Run nanoplot on long reads in parallel (only if long reads exist)
-    ch_long_filtered = long_reads
-        .filter { _meta, reads -> reads != null && reads.toString() != 'null' }
+    // ch_long_filtered = long_reads
+    //    .filter { _meta, reads -> reads != null && reads.toString() != 'null' }
     
     NANOPLOT_PRE(ch_long_filtered)
     ch_nanoplot_results = NANOPLOT_PRE.out
@@ -35,7 +47,7 @@ workflow PRE_QC {
         .collect()
     
     // Run Pre-QC MultiQC report
-    MULTIQC_PRE(ch_pre_multiqc, "pre")
+    MULTIQC_PRE(ch_pre_multiqc, "pre_qc")
 
     emit:
     // FastQC outputs
@@ -85,18 +97,14 @@ workflow TRIMMING {
     // Prepare FILTLONG input
     // Change from combine to join:
     ch_filtlong_input = ch_long_for_filtlong
-        .join(illumina_refs, by: 0, remainder: true)
-        .join(assembly, by: 0, remainder: true)
+        .join(illumina_refs, by: 0)
+        .join(assembly, by: 0)
         .map { meta, reads, illum, asm -> 
-            [meta, reads, illum ?: [meta, []], asm ?: null]
+            [meta, reads, illum, asm]
     }
 
     // Run FILTLONG on long reads
-    FILTLONG(
-        ch_filtlong_input.map { meta, reads, illum, asm -> [meta, reads] },
-        ch_filtlong_input.map { meta, reads, illum, asm -> illum },
-        ch_filtlong_input.map { meta, reads, illum, asm -> asm }
-    )
+    FILTLONG(ch_filtlong_input)
 
     emit:
     // Trimmed reads for POST-QC
@@ -122,12 +130,18 @@ workflow POST_QC {
 
     main:
     
-    // Run FastQC on trimmed short reads
-    FASTQC_POST(trimmed_short_reads)
+    // Run FastQC on trimmed short reads - add stage info
+    ch_trimmed_short_reads_post = trimmed_short_reads.map { meta, reads -> 
+        [[id: meta.id, read_type: 'short', stage: 'post_qc'], reads] 
+    }
+    FASTQC_POST(ch_trimmed_short_reads_post)
     
-    // Run nanoplot on FILTERED long reads
+    // Run nanoplot on FILTERED long reads - add stage info
     ch_long_filtered = filtered_long_reads
-        .filter { _meta, reads -> reads != null && reads.toString() != 'null' }
+        .filter { meta, reads -> reads != null && reads.toString() != 'null' }
+        .map { meta, reads -> 
+            [[id: meta.id, read_type: 'long', stage: 'post_qc'], reads] 
+        }
     
     NANOPLOT_POST(ch_long_filtered)
     ch_nanoplot_post_results = NANOPLOT_POST.out
@@ -139,7 +153,7 @@ workflow POST_QC {
         .collect()
     
     // Run Post-QC MultiQC report
-    MULTIQC_POST(ch_post_multiqc, "post")
+    MULTIQC_POST(ch_post_multiqc, "post_qc")
 
     emit:
     // FastQC outputs
@@ -169,7 +183,7 @@ workflow QC {
         .fromPath(samplesheet)
         .splitCsv(header: true)
 
-    // Split into short and long reads channels with better organization
+    // Split into channels - ALWAYS create entries for all samples
     ch_samples_split = ch_samples
     .multiMap { row -> 
         short_reads: 
@@ -181,24 +195,28 @@ workflow QC {
             [[id: row.sample_id, read_type: 'long'], [file(row.long_reads)]] : null
         
         illumina_refs: 
-            (row.illumina_ref_1 && row.illumina_ref_2) ? 
-            [[id: row.sample_id, read_type: 'illumina'], [file(row.illumina_ref_1), file(row.illumina_ref_2)]] : null
+            // Always create an entry - empty list if no files provided
+            [[id: row.sample_id, read_type: 'illumina'], 
+             (row.illumina_ref_1 && row.illumina_ref_2) ? 
+             [file(row.illumina_ref_1), file(row.illumina_ref_2)] : []]
         
         assembly: 
-            row.assembly ? 
-            [[id: row.sample_id, read_type: 'assembly'], [file(row.assembly)]] : null
+            // Always create an entry - null if no file provided
+            [[id: row.sample_id, read_type: 'assembly'], 
+             row.assembly ? file(row.assembly) : null]
     }
 
-    // Filter out nulls - this is the correct syntax
+    // Filter out nulls for reads, but keep all entries for optional references
     ch_short_reads = ch_samples_split.short_reads.filter { it != null }
     ch_long_reads = ch_samples_split.long_reads.filter { it != null }
-    ch_illumina_refs = ch_samples_split.illumina_refs.filter { it != null }
-    ch_assembly = ch_samples_split.assembly.filter { it != null }
+    ch_illumina_refs = ch_samples_split.illumina_refs  // Don't filter - keep all samples
+    ch_assembly = ch_samples_split.assembly            // Don't filter - keep all samples
+
 
     // Execute PRE-QC subworkflow
     PRE_QC(
-        ch_short_reads,
-        ch_long_reads
+        ch_short_reads.map { meta, reads -> [[id: meta.id, stage: 'pre_qc'], reads] },
+        ch_long_reads.map { meta, reads -> [[id: meta.id, stage: 'pre_qc'], reads] }
     )
     
     // Execute TRIMMING subworkflow (short reads only)
@@ -212,10 +230,10 @@ workflow QC {
     
     // Execute POST-QC subworkflow
     POST_QC(
-        TRIMMING.out.trimmed_reads,
-        TRIMMING.out.filtered_long_reads
+        TRIMMING.out.trimmed_reads.map { meta, reads -> [[id: meta.id, stage: 'post_qc'], reads] },
+        TRIMMING.out.filtered_long_reads.map { meta, reads -> [[id: meta.id, stage: 'post_qc'], reads] }
     )
-
+    
     emit:
     // PRE-QC outputs
     fastqc_pre_html = PRE_QC.out.fastqc_html
