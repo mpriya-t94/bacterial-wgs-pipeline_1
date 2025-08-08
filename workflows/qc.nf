@@ -50,9 +50,13 @@ workflow PRE_QC {
     MULTIQC_PRE(ch_pre_multiqc, "pre_qc")
 
     emit:
-    // FastQC outputs
-    fastqc_html = FASTQC_PRE.out.html
-    fastqc_zip = FASTQC_PRE.out.zip
+    // FastQC outputs - restore original meta structure
+    fastqc_html = FASTQC_PRE.out.html.map { meta, files -> 
+        [[id: meta.id, read_type: meta.read_type], files] 
+    }
+    fastqc_zip = FASTQC_PRE.out.zip.map { meta, files -> 
+        [[id: meta.id, read_type: meta.read_type], files] 
+    }
     
     // nanoplot outputs
     nanoplot_html = ch_nanoplot_results.html
@@ -62,9 +66,13 @@ workflow PRE_QC {
     multiqc_html = MULTIQC_PRE.out.html
     multiqc_data = MULTIQC_PRE.out.data
     
-    // Pass through channels for downstream processing
-    short_reads_passthrough = short_reads
-    long_reads_passthrough = long_reads
+    // Pass through channels for downstream processing - restore original meta structure
+    short_reads_passthrough = ch_short_reads_pre.map { meta, reads -> 
+        [[id: meta.id, read_type: meta.read_type], reads] 
+    }
+    long_reads_passthrough = ch_long_filtered.map { meta, reads -> 
+        [[id: meta.id, read_type: meta.read_type], reads] 
+    }
 }
 
 //
@@ -219,6 +227,14 @@ workflow QC {
         ch_long_reads.map { meta, reads -> [[id: meta.id, stage: 'pre_qc'], reads] }
     )
     
+    // Execute TRIMMING subworkflow
+    // Debug: Check what PRE_QC is outputting
+    PRE_QC.out.short_reads_passthrough.view { "Short reads passthrough: $it" }
+    PRE_QC.out.long_reads_passthrough.view { "Long reads passthrough: $it" }
+    PRE_QC.out.fastqc_zip.view { "FastQC zip files: $it" }
+    ch_illumina_refs.view { "Illumina refs: $it" }
+    ch_assembly.view { "Assembly: $it" }
+
     // Execute TRIMMING subworkflow (short reads only)
     TRIMMING(
         PRE_QC.out.short_reads_passthrough,
