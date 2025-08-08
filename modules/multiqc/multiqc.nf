@@ -1,6 +1,6 @@
 process MULTIQC {
     tag "multiqc_${stage}"
-    publishDir "${params.outdir}/multiqc", mode: 'copy'
+    publishDir "${params.outdir}/multiqc_${stage}", mode: 'copy'
 
     // Docker container for MultiQC
     container 'quay.io/biocontainers/multiqc:1.30--pyhdfd78af_0'
