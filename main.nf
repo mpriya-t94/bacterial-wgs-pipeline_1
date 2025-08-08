@@ -26,36 +26,28 @@ workflow {
     }
 
     // Check if FASTP actually runs
-    QC.out.fastp_trimmed_reads
-        .ifEmpty { "No FASTP output - check if trimming ran" }
-        .view { meta, _files ->
-            "FASTP adaptive trimming completed for sample: ${meta.id}" 
-        }
+    QC.out.fastp_trimmed_reads.view { meta, _files ->
+        "FASTP adaptive trimming completed for sample: ${meta.id}" 
+    }
 
     // Check if POST-QC runs
-    QC.out.fastqc_post_html
-        .ifEmpty { "No POST-QC FastQC - check if POST_QC workflow ran" }
-        .view { meta, _files ->
-            "Post-QC FastQC completed for sample: ${meta.id}" 
-        }
+    QC.out.fastqc_post_html.view { meta, _files ->
+        "Post-QC FastQC completed for sample: ${meta.id}" 
+    }
     
-    QC.out.nanoplot_post_html
-        .ifEmpty { "No POST-QC Nanoplot - check if POST_QC workflow ran" }
-        .view { meta, _files ->
-            "Post-QC Nanoplot completed for sample: ${meta.id}" 
-        }
+    QC.out.nanoplot_post_html.view { meta, _files ->
+        "Post-QC Nanoplot completed for sample: ${meta.id}" 
+    }
     
-    QC.out.multiqc_post_html
-        .ifEmpty { "No POST-QC MultiQC - check if POST_QC workflow ran" }
-        .view { file ->
-            "Post-QC MultiQC report generated: ${file}" 
-        }
+    QC.out.multiqc_post_html.view { file ->
+        "Post-QC MultiQC report generated: ${file}" 
+    }
     
     // Call the ASSEMBLY workflow - add debug
     println "Calling ASSEMBLY workflow..."
     QC.out.fastp_trimmed_reads.view { "FASTP output to ASSEMBLY: $it" }
     QC.out.filtlong_filtered_reads.view { "FILTLONG output to ASSEMBLY: $it" }
-    
+
     // Call the ASSEMBLY workflow
     ASSEMBLY(
         QC.out.fastp_trimmed_reads,
