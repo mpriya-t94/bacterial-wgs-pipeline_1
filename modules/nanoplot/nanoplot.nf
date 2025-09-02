@@ -19,6 +19,6 @@ process NANOPLOT {
         --threads ${task.cpus} \\
         --prefix ${meta.id} \\
         --outdir . \\
-        --format png --format svg
+        --format png,svg
     """
 }
