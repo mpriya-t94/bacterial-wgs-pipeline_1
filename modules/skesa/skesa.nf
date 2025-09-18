@@ -2,7 +2,7 @@ process SKESA {
     tag "$meta.id"
     publishDir "${params.outdir}/${meta.id}/assembly/skesa", mode: 'copy'
 
-    container 'ncbi/skesa:latest'
+    container 'quay.io/biocontainers/skesa:2.5.1--h077b44d_3'
 
     input:
     tuple val(meta), path(reads)
