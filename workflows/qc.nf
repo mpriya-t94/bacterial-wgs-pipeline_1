@@ -83,10 +83,10 @@ workflow TRIMMING {
     short_reads     // Channel: [[meta], [reads]]
     long_reads      // Channel: [[meta], [reads]]
     fastqc_zip      // Channel: [[meta], zip_files] from PRE_QC
-    illumina_refs   // Channel: [[meta], [illumina_R1, illumina_R2]]
-    assembly        // Channel: [[meta], assembly_file]
 
     main:
+
+    long_reads.view { meta, reads -> "Long reads input: ${meta.id} -> ${reads}" }
     
     // Join short reads with their corresponding FastQC results
     ch_trimming_input = short_reads
@@ -102,17 +102,12 @@ workflow TRIMMING {
     ch_long_for_filtlong = long_reads
         .filter { _meta, reads -> reads != null && reads.toString() != 'null' }
 
-    // Prepare FILTLONG input
-    // Change from combine to join:
-    ch_filtlong_input = ch_long_for_filtlong
-        .join(illumina_refs, by: 0)
-        .join(assembly, by: 0)
-        .map { meta, reads, illum, asm -> 
-            [meta, reads, illum, asm]
-    }
+    // SIMPLIFIED: Long read processing through FILTLONG (no references)
+    ch_long_for_filtlong = long_reads
+        .filter { _meta, reads -> reads != null && reads.toString() != 'null' }
 
-    // Run FILTLONG on long reads
-    FILTLONG(ch_filtlong_input)
+    // Simple FILTLONG input - just long reads, no references
+    FILTLONG(ch_long_for_filtlong)
 
     emit:
     // Trimmed reads for POST-QC
@@ -201,24 +196,11 @@ workflow QC {
         long_reads: 
             row.long_reads ? 
             [[id: row.sample_id, read_type: 'long'], [file(row.long_reads)]] : null
-        
-        illumina_refs: 
-            // Always create an entry - empty list if no files provided
-            [[id: row.sample_id, read_type: 'illumina'], 
-             (row.illumina_ref_1 && row.illumina_ref_2) ? 
-             [file(row.illumina_ref_1), file(row.illumina_ref_2)] : []]
-        
-        assembly: 
-            // Always create an entry - null if no file provided
-            [[id: row.sample_id, read_type: 'assembly'], 
-             row.assembly ? file(row.assembly) : null]
     }
 
     // Filter out nulls for reads, but keep all entries for optional references
     ch_short_reads = ch_samples_split.short_reads.filter { it != null }
     ch_long_reads = ch_samples_split.long_reads.filter { it != null }
-    ch_illumina_refs = ch_samples_split.illumina_refs  // Don't filter - keep all samples
-    ch_assembly = ch_samples_split.assembly            // Don't filter - keep all samples
 
 
     // Execute PRE-QC subworkflow
@@ -227,21 +209,13 @@ workflow QC {
         ch_long_reads.map { meta, reads -> [[id: meta.id, stage: 'pre_qc'], reads] }
     )
     
-    // Execute TRIMMING subworkflow
-    // Debug: Check what PRE_QC is outputting
-    PRE_QC.out.short_reads_passthrough.view { "Short reads passthrough: $it" }
-    PRE_QC.out.long_reads_passthrough.view { "Long reads passthrough: $it" }
-    PRE_QC.out.fastqc_zip.view { "FastQC zip files: $it" }
-    ch_illumina_refs.view { "Illumina refs: $it" }
-    ch_assembly.view { "Assembly: $it" }
+    
 
     // Execute TRIMMING subworkflow (short reads only)
     TRIMMING(
         PRE_QC.out.short_reads_passthrough,
         PRE_QC.out.long_reads_passthrough,
-        PRE_QC.out.fastqc_zip,
-        ch_illumina_refs,
-        ch_assembly
+        PRE_QC.out.fastqc_zip
     )
     
     // Execute POST-QC subworkflow
