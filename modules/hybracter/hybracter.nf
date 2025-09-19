@@ -9,9 +9,8 @@ process HYBRACTER {
     tuple val(meta2), path(short_reads)
 
 output:
-    tuple val(meta), path("*/FINAL_OUTPUT/complete/*_final.fasta"), emit: complete_assemblies, optional: true
-    tuple val(meta), path("*/FINAL_OUTPUT/incomplete/*_final.fasta"), emit: incomplete_assemblies, optional: true
-    tuple val(meta), path("*/FINAL_OUTPUT/complete/*_plasmid.fasta"), emit: plasmids, optional: true
+    tuple val(meta), path("*/FINAL_OUTPUT/complete/*"), emit: complete_assemblies, optional: true
+    tuple val(meta), path("*/FINAL_OUTPUT/incomplete/*"), emit: incomplete_assemblies, optional: true
     tuple val(meta), path("*/FINAL_OUTPUT/hybracter_summary.tsv"), emit: summary
     // tuple val(meta), path("*/FINAL_OUTPUT/processing_summary.tsv"), emit: processing_summary
 
