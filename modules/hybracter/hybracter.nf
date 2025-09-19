@@ -13,7 +13,7 @@ output:
     tuple val(meta), path("*/FINAL_OUTPUT/incomplete/*_final.fasta"), emit: incomplete_assemblies, optional: true
     tuple val(meta), path("*/FINAL_OUTPUT/complete/*_plasmid.fasta"), emit: plasmids, optional: true
     tuple val(meta), path("*/FINAL_OUTPUT/hybracter_summary.tsv"), emit: summary
-    tuple val(meta), path("*/FINAL_OUTPUT/processing_summary.tsv"), emit: processing_summary
+    // tuple val(meta), path("*/FINAL_OUTPUT/processing_summary.tsv"), emit: processing_summary
 
     script:
     def prefix = "${meta.id}"
