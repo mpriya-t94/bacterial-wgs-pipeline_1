@@ -67,34 +67,34 @@ workflow {
         "HYBRACTER incomplete assembly generated for sample: ${meta.id}"
     }
 
-    // Collect all assemblies for QUAST
-    ch_all_assemblies = ASSEMBLY.out.skesa_contigs
-        .mix(ASSEMBLY.out.hybracter_complete)
-        .mix(ASSEMBLY.out.hybracter_incomplete)
+    // // Collect all assemblies for QUAST
+    // ch_all_assemblies = ASSEMBLY.out.skesa_contigs
+    //     .mix(ASSEMBLY.out.hybracter_complete)
+    //     .mix(ASSEMBLY.out.hybracter_incomplete)
 
-    // Prepare optional reference files
-    ch_reference = params.reference_genome ? 
-        Channel.value(file(params.reference_genome)) : 
-        Channel.value(file('NO_FILE'))
+    // // Prepare optional reference files
+    // ch_reference = params.reference_genome ? 
+    //     Channel.value(file(params.reference_genome)) : 
+    //     Channel.value(file('NO_FILE'))
     
-    ch_genes = params.gene_annotations ? 
-        Channel.value(file(params.gene_annotations)) : 
-        Channel.value(file('NO_FILE'))
+    // ch_genes = params.gene_annotations ? 
+    //     Channel.value(file(params.gene_annotations)) : 
+    //     Channel.value(file('NO_FILE'))
 
-    // Run QUAST assessment directly
-    QUAST(
-        ch_all_assemblies,
-        ch_reference,
-        ch_genes,
-        QC.out.fastp_trimmed_reads
-    )
+    // // Run QUAST assessment directly
+    // QUAST(
+    //     ch_all_assemblies,
+    //     ch_reference,
+    //     ch_genes,
+    //     QC.out.fastp_trimmed_reads
+    // )
 
-    // Print QUAST completion messages
-    QUAST.out.html.view { meta, _files ->
-        "QUAST assessment completed for sample: ${meta.id}"
-    }
+    // // Print QUAST completion messages
+    // QUAST.out.html.view { meta, _files ->
+    //     "QUAST assessment completed for sample: ${meta.id}"
+    // }
 
-    QUAST.out.tsv.view { meta, _files ->
-        "QUAST TSV report generated for sample: ${meta.id}"
-    }
+    // QUAST.out.tsv.view { meta, _files ->
+    //     "QUAST TSV report generated for sample: ${meta.id}"
+    // }
 }

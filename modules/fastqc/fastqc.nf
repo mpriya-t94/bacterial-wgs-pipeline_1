@@ -1,6 +1,6 @@
 process FASTQC {
     tag "$meta.id"
-    publishDir "${params.outdir}/${meta.id}/qc/fastqc", mode: 'copy'
+    publishDir "${params.outdir}/${meta.id}/qc/${meta.stage}/fastqc", mode: 'copy'
 
     // Docker container for FASTQC
     container 'quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0'

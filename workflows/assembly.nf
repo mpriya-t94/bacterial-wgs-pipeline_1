@@ -58,9 +58,9 @@ workflow ASSEMBLY {
     // HYBRACTER outputs (hybrid and long-read assemblies)
     hybracter_complete = HYBRACTER.out.complete_assemblies
     hybracter_incomplete = HYBRACTER.out.incomplete_assemblies
-    hybracter_plasmids = HYBRACTER.out.plasmids
+    // hybracter_plasmids = HYBRACTER.out.plasmids
     hybracter_summary = HYBRACTER.out.summary
-    hybracter_processing = HYBRACTER.out.processing_summary
+    // hybracter_processing = HYBRACTER.out.processing_summary
     
     // Combined assemblies channel
     all_assemblies = SKESA.out.contigs
