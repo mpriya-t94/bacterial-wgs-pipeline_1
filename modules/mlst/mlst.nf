@@ -40,9 +40,9 @@ process MLST {
         ${minscore_option} \\
         ${minid_option} \\
         ${mincov_option} \\
-    --nopath \\
-    --threads ${task.cpus ?: 1} \\
-    genome_dir/* > mlst_output/mlst_results.csv
+        --nopath \\
+        --threads ${task.cpus ?: 1} \\
+        genome_dir/* > mlst_output/mlst_results.csv
 
     # Generate JSON output if requested
     if [ "${params.mlst_output_json}" = "true" ]; then
@@ -100,4 +100,4 @@ process MLST {
     
     echo "MLST analysis completed successfully"
     """
-}s
+}
