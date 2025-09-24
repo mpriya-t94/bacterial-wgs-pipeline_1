@@ -2,18 +2,17 @@ process HYBRACTER {
     tag "$meta.id"
     publishDir "${params.outdir}/${meta.id}/assembly/hybracter", mode: 'copy'
 
-    conda 'bioconda::hybracter=0.11.2'
+    container 'quay.io/gbouras13/hybracter:0.11.0'
 
     input:
     tuple val(meta), path(long_reads)
-    tuple val(meta2), path(short_reads, stageAs: 'null')
+    tuple val(meta2), path(short_reads)
 
-    output:
-    tuple val(meta), path("*/FINAL_OUTPUT/complete/*.fasta"), emit: complete_assemblies
-    tuple val(meta), path("*/FINAL_OUTPUT/incomplete/*.fasta"), emit: incomplete_assemblies, optional: true
-    tuple val(meta), path("*/FINAL_OUTPUT/plasmids/*.fasta"), emit: plasmids, optional: true
-    tuple val(meta), path("*/hybracter_summary.tsv"), emit: summary
-    tuple val(meta), path("*/processing_summary.tsv"), emit: processing_summary
+output:
+    tuple val(meta), path("*/FINAL_OUTPUT/complete/*"), emit: complete_assemblies, optional: true
+    tuple val(meta), path("*/FINAL_OUTPUT/incomplete/*"), emit: incomplete_assemblies, optional: true
+    tuple val(meta), path("*/FINAL_OUTPUT/hybracter_summary.tsv"), emit: summary
+    // tuple val(meta), path("*/FINAL_OUTPUT/processing_summary.tsv"), emit: processing_summary
 
     script:
     def prefix = "${meta.id}"
@@ -21,21 +20,21 @@ process HYBRACTER {
     // Assembly mode - hybrid if short reads available, long-only if not
     def assembly_mode = (short_reads && short_reads.size() >= 2) ? "hybrid-single" : "long-single"
     
-    // Parameters
-    def threads = task.cpus ?: 4
-    def memory = task.memory ? "${task.memory.toGiga()}G" : "16G"
-    def chromosome_size = params.chromosome_size ?: "auto"
-    def chr_size_param = chromosome_size == "auto" ? "" : "-c ${chromosome_size}"
+    // // Parameters
+    // def threads = task.cpus ?: 4
+    // def memory = task.memory ? "${task.memory.toGiga()}G" : "16G"
+    // def chromosome_size = params.chromosome_size ?: "auto"
+    // def chr_size_param = chromosome_size == "auto" ? "" : "-c ${chromosome_size}"
     
-    // Optional parameters
-    def min_length = params.min_length ? "--min_length ${params.min_length}" : ""
-    def min_quality = params.min_quality ? "--min_quality ${params.min_quality}" : ""
-    def contaminants = params.contaminants ? "--contaminants ${params.contaminants}" : ""
-    def logic = params.logic ? "--logic ${params.logic}" : ""
-    def depth_filter = params.depth_filter ? "--depth_filter ${params.depth_filter}" : ""
-    def no_pypolca = params.no_pypolca ? "--no_pypolca" : ""
-    def no_medaka = params.no_medaka ? "--no_medaka" : ""
-    def medaka_model = params.medaka_model ? "--medaka_model ${params.medaka_model}" : ""
+    // // Optional parameters
+    // def min_length = params.min_length ? "--min_length ${params.min_length}" : ""
+    // def min_quality = params.min_quality ? "--min_quality ${params.min_quality}" : ""
+    // def contaminants = params.contaminants ? "--contaminants ${params.contaminants}" : ""
+    // def logic = params.logic ? "--logic ${params.logic}" : ""
+    // def depth_filter = params.depth_filter ? "--depth_filter ${params.depth_filter}" : ""
+    // def no_pypolca = params.no_pypolca ? "--no_pypolca" : ""
+    // // def no_medaka = params.no_medaka ? "--no_medaka" : ""
+    // // def medaka_model = params.medaka_model ? "--medaka_model ${params.medaka_model}" : ""
 
     """
     mkdir -p ${prefix}
@@ -46,33 +45,12 @@ process HYBRACTER {
             -1 ${short_reads[0]} \\
             -2 ${short_reads[1]} \\
             -s ${prefix} \\
-            ${chr_size_param} \\
-            --out ${prefix} \\
-            --threads ${threads} \\
-            --ram ${memory} \\
-            ${min_length} \\
-            ${min_quality} \\
-            ${contaminants} \\
-            ${logic} \\
-            ${depth_filter} \\
-            ${no_pypolca} \\
-            ${no_medaka} \\
-            ${medaka_model}
+            --auto
     else
         hybracter long-single \\
             -l ${long_reads} \\
             -s ${prefix} \\
-            ${chr_size_param} \\
-            --out ${prefix} \\
-            --threads ${threads} \\
-            --ram ${memory} \\
-            ${min_length} \\
-            ${min_quality} \\
-            ${contaminants} \\
-            ${logic} \\
-            ${depth_filter} \\
-            ${no_medaka} \\
-            ${medaka_model}
+            --auto
     fi
     """
 }

@@ -5,7 +5,7 @@ process FILTLONG {
     container 'quay.io/biocontainers/filtlong:0.2.1--h9a82719_0'
 
     input:
-    tuple val(meta), path(reads), path(illumina_reads), path(assembly)
+    tuple val(meta), path(reads)
 
     output:
     tuple val(meta), path("*_filtered.fastq.gz"), emit: filtered_reads
@@ -13,29 +13,21 @@ process FILTLONG {
 
     script:
     def prefix = "${meta.id}"
-
+    
     // Debug line to see what we received
-    println "FILTLONG - Sample: ${meta.id}, Illumina files: ${illumina_reads}, Assembly: ${assembly}"
+    println "FILTLONG - Sample: ${meta.id}, Reads: ${reads}"
     
-    // Handle optional Illumina reference reads
-    def illumina_ref = ""
-    if (illumina_reads && illumina_reads instanceof List && illumina_reads.size() >= 2) {
-        illumina_ref = "-1 ${illumina_reads[0]} -2 ${illumina_reads[1]}"
-    } else if (illumina_reads && illumina_reads.size() == 1) {
-        // Handle single-end Illumina if needed
-        illumina_ref = "-1 ${illumina_reads[0]}"
-    }
-    
-    // Handle optional assembly reference
-    def assembly_ref = (assembly && assembly.toString() != 'null') ? "-a ${assembly}" : ""
-    
-    // Filtering parameters
+    // Filtering parameters - provide defaults if none set
     def min_length = params.min_length ? "--min_length ${params.min_length}" : ""
     def max_length = params.max_length ? "--max_length ${params.max_length}" : ""
     def keep_percent = params.keep_percent ? "--keep_percent ${params.keep_percent}" : ""
     def target_bases = params.target_bases ? "--target_bases ${params.target_bases}" : ""
     def min_mean_q = params.min_mean_q ? "--min_mean_q ${params.min_mean_q}" : ""
     def min_window_q = params.min_window_q ? "--min_window_q ${params.min_window_q}" : ""
+    
+    // Ensure at least one filtering parameter is set
+    def has_filter = min_length || max_length || keep_percent || target_bases || min_mean_q || min_window_q
+    def default_filter = has_filter ? "" : "--keep_percent 95"
     
     // Scoring weight parameters
     def length_weight = (params.length_weight && params.length_weight != 1) ? "--length_weight ${params.length_weight}" : ""
@@ -51,12 +43,10 @@ process FILTLONG {
     """
     echo "Running FILTLONG for sample: ${meta.id}"
     echo "Long reads file: ${reads}"
-    echo "Illumina reference: ${illumina_ref}"
-    echo "Assembly reference: ${assembly_ref}"
+    echo "Mode: Quality-based filtering (no references)"
 
     filtlong \\
-        ${illumina_ref} \\
-        ${assembly_ref} \\
+        ${default_filter} \\
         ${min_length} \\
         ${max_length} \\
         ${keep_percent} \\
@@ -73,6 +63,7 @@ process FILTLONG {
         ${reads} \\
         2> ${prefix}_filtlong.log \\
         | gzip > ${prefix}_filtered.fastq.gz
+    
     echo "FILTLONG completed for sample: ${meta.id}"
     """
 }
