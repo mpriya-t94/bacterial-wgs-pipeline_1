@@ -18,7 +18,6 @@ process NANOPLOT {
         --fastq ${reads} \\
         --threads ${task.cpus} \\
         --prefix ${meta.id} \\
-        --outdir . \\
-        --format png,svg
+        --outdir .
     """
 }
